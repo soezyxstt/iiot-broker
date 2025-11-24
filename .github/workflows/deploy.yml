@@ -23,5 +23,5 @@ jobs:
           cd /root/iiot/mqtt/broker
           git pull origin main
           npm install --production
-          pm2 restart iiot-broker
+          pm2 restart iiot-broker || pm2 start broker.js --name iiot-broker
           pm2 save
