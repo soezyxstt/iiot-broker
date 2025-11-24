@@ -18,17 +18,10 @@ jobs:
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         port: 22
         script: |
-          # 1. Navigate to the project folder
+          export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
           cd /root/iiot/mqtt/broker
-
-          # 2. Pull the latest changes
           git pull origin main
-
-          # 3. Install any new dependencies (if package.json changed)
           npm install --production
-
-          # 4. Restart the broker so changes take effect
           pm2 restart iiot-broker
-          
-          # 5. Save the PM2 list (just in case)
           pm2 save
