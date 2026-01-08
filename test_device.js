@@ -7,27 +7,27 @@ const client = mqtt.connect('mqtt://localhost:1883');
 // Data Dummy (Sesuai dengan skema machine_logs yang kompleks tadi)
 const dummyPayload = {
     // Linear Actuators
-    la1Forward: true,
-    la1Backward: true,
-    la2Forward: true,
-    la2Backward: true,
+    la1Forward: false,
+    la1Backward: false,
+    la2Forward: false,
+    la2Backward: false,
 
     // Stepper Relays
-    stepper1Relay: true,
-    stepper2Relay: true,
+    stepper1Relay: false,
+    stepper2Relay: false,
 
     // Sensors & Proximity
     irRelay: true,
-    inductiveRelay: true,
-    capacitiveRelay: true,
+    inductiveRelay: false,
+    capacitiveRelay: false,
     irSensor: true,
     inductiveSensor: true,
     capacitiveSensor: true,
 
     // Values
-    stepper1Rpm: 250.7,
-    stepper1Position: 45.0,
-    stepper2Rpm: 0.0,
+    stepper1Rpm: 25.0,
+    stepper1Position: 0.0,
+    stepper2Rpm: 50.0,
     stepper2Position: 0.0,
 
     // Status
@@ -35,14 +35,14 @@ const dummyPayload = {
     
     // Outer Points (Harus string: empty/occupied/occupied_metallic)
     outerPoint1: "occupied",
-    outerPoint2: "empty",
+    outerPoint2: "occupied",
     outerPoint3: "empty",
     outerPoint4: "empty",
     outerPoint5: "empty",
 
     // Inner Points
     innerPoint1Occupied: true,
-    innerPoint2Occupied: false,
+    innerPoint2Occupied: true,
     innerPoint3Occupied: false,
     innerPoint4Occupied: false,
     innerPoint5Occupied: false
