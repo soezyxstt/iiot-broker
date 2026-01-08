@@ -7,7 +7,7 @@ const ws = require('websocket-stream');
 // We wrap these in try-catch so if a file is missing, the broker still starts
 let handleConveyor, handleFess;
 try {
-  handleConveyor = require('./handlers/conveyor');
+  handleConveyor = require('./handlers/conveyor_database');
   handleFess = require('./handlers/fess');
 } catch (e) {
   console.warn("⚠️ Warning: One or more handler files are missing or have syntax errors.");
