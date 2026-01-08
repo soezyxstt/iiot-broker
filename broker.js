@@ -28,7 +28,11 @@ aedes.on('publish', function (packet, client) {
   // 2. Route to Project A
   if (topic.startsWith('conveyor/')) {
     try {
-      if (handleConveyor) handleConveyor(packet, client);
+      if (typeof handleConveyor === 'function') {
+        handleConveyor(packet, client, aedes);
+      } else {
+        console.warn("[ROUTER WARNING] Conveyor handler is not a function.");
+      }
     } catch (err) {
       console.error(`[ROUTER ERROR] Conveyor handler crashed: ${err.message}`);
     }
@@ -36,7 +40,11 @@ aedes.on('publish', function (packet, client) {
   // 3. Route to Project B
   else if (topic.startsWith('fess/')) {
     try {
-      if (handleFess) handleFess(packet, client);
+      if (typeof handleFess === 'function') {
+        handleFess(packet, client, aedes);
+      } else {
+        // console.warn("[ROUTER WARNING] Fess handler is not a function.");
+      }
     } catch (err) {
       console.error(`[ROUTER ERROR] FESS handler crashed: ${err.message}`);
     }
