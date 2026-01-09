@@ -1,66 +1,66 @@
-// handlers/conveyor.js
-const { insertData } = require('./dbHandler');
+const { createClient } = require('@supabase/supabase-js');
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
-module.exports = function (packet, client) {
-    const messageString = packet.payload.toString();
-    console.log(`📦 [CONVEYOR] Raw Data: ${messageString}`);
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
 
-    try {
-        // 1. Terima data mentah dari MQTT (Anggaplah formatnya camelCase)
-        const raw = JSON.parse(messageString);
+if (!supabaseUrl || !supabaseKey) {
+    console.error("❌ Gagal baca .env (Pastikan SUPABASE_SERVICE_KEY ada)");
+}
+const supabase = supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
-        // 2. MAPPING: Ubah ke format Database (snake_case)
-        // Kita buat object baru yang kuncinya SAMA PERSIS dengan nama kolom database
-        const dbPayload = {
-            // -- Linear Actuators --
-            la1_forward: Boolean(raw.la1Forward),   // Pastikan jadi true/false
-            la1_backward: Boolean(raw.la1Backward),
-            la2_forward: Boolean(raw.la2Forward),
-            la2_backward: Boolean(raw.la2Backward),
+module.exports = async function (packet, client) {
+  if (!supabase) return;
 
-            // -- Stepper Relays --
-            stepper1_relay: Boolean(raw.stepper1Relay),
-            stepper2_relay: Boolean(raw.stepper2Relay),
-
-            // -- Proximity Relays --
-            ir_relay: Boolean(raw.irRelay),
-            inductive_relay: Boolean(raw.inductiveRelay),
-            capacitive_relay: Boolean(raw.capacitiveRelay),
-
-            // -- Sensor Inputs --
-            ir_sensor: Boolean(raw.irSensor),
-            inductive_sensor: Boolean(raw.inductiveSensor),
-            capacitive_sensor: Boolean(raw.capacitiveSensor),
-
-            // -- Stepper Feedback (Numeric) --
-            stepper1_rpm: Number(raw.stepper1Rpm),
-            stepper1_pos: Number(raw.stepper1Position),
-            stepper2_rpm: Number(raw.stepper2Rpm),
-            stepper2_pos: Number(raw.stepper2Position),
-
-            // -- System Health --
-            is_power_live: Boolean(raw.isPowerLive),
-
-            // -- Outer Points (Hati-hati dengan ENUM!) --
-            // Pastikan nilainya cuma: 'empty', 'occupied', atau 'occupied_metallic'
-            outer_point_1: raw.outerPoint1 || 'empty', 
-            outer_point_2: raw.outerPoint2 || 'empty',
-            outer_point_3: raw.outerPoint3 || 'empty',
-            outer_point_4: raw.outerPoint4 || 'empty',
-            outer_point_5: raw.outerPoint5 || 'empty',
-
-            // -- Inner Points --
-            inner_point_1_occupied: Boolean(raw.innerPoint1Occupied),
-            inner_point_2_occupied: Boolean(raw.innerPoint2Occupied),
-            inner_point_3_occupied: Boolean(raw.innerPoint3Occupied),
-            inner_point_4_occupied: Boolean(raw.innerPoint4Occupied),
-            inner_point_5_occupied: Boolean(raw.innerPoint5Occupied),
-        };
-
-        // 3. Kirim payload yang sudah rapi ke Database
-        insertData('machine_logs', dbPayload);
-
-    } catch (err) {
-        console.error('⚠️ [CONVEYOR ERROR] Mapping Gagal:', err.message);
+  try {
+    let data;
+    // Parsing JSON
+    if (typeof packet.payload === 'object') {
+        data = packet.payload;
+        if (typeof data === 'string') try { data = JSON.parse(data); } catch(e) {}
+    } else {
+        try { data = JSON.parse(packet.payload.toString()); } catch(e) { return; }
     }
+    if (typeof data === 'string') try { data = JSON.parse(data); } catch(e) {}
+
+    // --- MAPPING KE KOLOM DATABASE (SNAKE_CASE) ---
+    // Kiri: Nama Kolom di Database (Drizzle Schema)
+    // Kanan: Nama Variabel di JS (Bridge State)
+    
+    const insertPayload = {
+      // SENSORS
+      ir_sensor:             data.irSensor ?? false,
+      inductive_sensor:      data.inductiveSensor ?? false,
+      capacitive_sensor:     data.capacitiveSensor ?? false,
+      position_inner_sensor: data.positionInnerSensor ?? false,
+      position_outer_sensor: data.positionOuterSensor ?? false, // Boolean sesuai schema
+
+      // DATA REGISTERS
+      motor_speed_sensor:    data.motorSpeedSensor ?? 0,
+      object_inner_count:    data.objectInnerCount ?? 0,
+      object_outer_count:    data.objectOuterCount ?? 0,
+
+      // ACTUATORS
+      dl_push:               data.dlPush ?? false,
+      dl_pull:               data.dlPull ?? false,
+      ld_push:               data.ldPush ?? false,
+      ld_pull:               data.ldPull ?? false,
+      stepper_inner_rotate:  data.stepperInnerRotate ?? false,
+      stepper_outer_rotate:  data.stepperOuterRotate ?? false,
+      stepper_speed_setting: data.stepperSpeedSetting ?? 0
+    };
+
+    // Insert ke tabel 'conveyor_logs'
+    const { error } = await supabase.from('conveyor_logs').insert([insertPayload]);
+
+    if (error) {
+      console.error("❌ [DB Error]:", error.message);
+    } else {
+      console.log(`✅ [DB Success] Saved! (InnerObj: ${insertPayload.object_inner_count} | OuterObj: ${insertPayload.object_outer_count})`);
+    }
+
+  } catch (err) {
+    console.error("❌ [Handler Crash]:", err.message);
+  }
 };

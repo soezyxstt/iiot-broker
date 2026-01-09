@@ -25,9 +25,9 @@ const dummyPayload = {
     capacitiveSensor: true,
 
     // Values
-    stepper1Rpm: 25.0,
+    stepper1Rpm: 20.0,
     stepper1Position: 0.0,
-    stepper2Rpm: 50.0,
+    stepper2Rpm: 0.0,
     stepper2Position: 0.0,
 
     // Status
