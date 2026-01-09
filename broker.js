@@ -7,7 +7,7 @@ const mqtt = require('mqtt');
 // --- 1. CONFIGURATION ---
 const LOCAL_TCP_PORT = 1883;
 const LOCAL_WS_PORT = 1884;
-const REMOTE_HOST = 'mqtt://iot.tf.itb.ac.id';
+const REMOTE_HOST = 'ws://iot.tf.itb.ac.id';
 const REMOTE_TOPIC_SUB = 'ITB/IIOT/conveyor/#'; 
 const REMOTE_TOPIC_PUB_PREFIX = 'ITB/IIOT';
 
@@ -21,7 +21,7 @@ console.log(`🔌 Connecting to ITB (${REMOTE_HOST})...`);
 
 // FIX 1: Add a Random Client ID to prevent conflicts
 const remoteClient = mqtt.connect(REMOTE_HOST, { 
-    port: 1883,
+    port: 1884,
     clientId: 'bridge_' + Math.random().toString(16).substr(2, 8),
     clean: true,
     connectTimeout: 4000
