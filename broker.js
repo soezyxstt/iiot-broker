@@ -4,10 +4,51 @@ const httpServer = require('http').createServer();
 const ws = require('websocket-stream');
 const mqtt = require('mqtt'); 
 
+// --- IMPORT HANDLER DATABASE (Mimicked from bridge_itb.js) ---
+let handleConveyor;
+try {
+  handleConveyor = require('./handlers/conveyor_database');
+} catch (e) {
+  console.error("❌ ERROR IMPORT HANDLER:", e);
+}
+
+// --- INITIAL STATE (Mimicked from bridge_itb.js) ---
+let lastKnownState = {
+  // -- SENSORS (Boolean) --
+  irSensor: false,
+  inductiveSensor: false,
+  capacitiveSensor: false,
+  positionInnerSensor: false,
+  positionOuterSensor: false, 
+
+  // -- SENSORS (Data / Integer) --
+  motorSpeedSensor: 0,
+  objectInnerCount: 0,
+  objectOuterCount: 0,
+
+  // -- ACTUATORS (Boolean) --
+  dlPush: false,
+  dlPull: false,
+  ldPush: false,
+  ldPull: false,
+  stepperInnerRotate: false,
+  stepperOuterRotate: false,
+  
+  // -- ACTUATORS DATA --
+  stepperSpeedSetting: 0
+};
+
+// Helper: Parse Boolean
+function parseBool(val) {
+    if (val === undefined || val === null) return false;
+    const s = val.toString().toLowerCase();
+    return s === '1' || s === 'true' || s === 'on';
+}
+
 // --- 1. CONFIGURATION ---
-const LOCAL_TCP_PORT = 1883;
-const LOCAL_WS_PORT = 1884;
-const REMOTE_HOST = 'ws://iot.tf.itb.ac.id';
+const LOCAL_TCP_PORT = 1885;
+const LOCAL_WS_PORT = 1886;
+const REMOTE_HOST = 'mqtt://iot.tf.itb.ac.id';
 const REMOTE_TOPIC_SUB = 'ITB/IIOT/conveyor/#'; 
 const REMOTE_TOPIC_PUB_PREFIX = 'ITB/IIOT';
 
@@ -21,7 +62,7 @@ console.log(`🔌 Connecting to ITB (${REMOTE_HOST})...`);
 
 // FIX 1: Add a Random Client ID to prevent conflicts
 const remoteClient = mqtt.connect(REMOTE_HOST, { 
-    port: 1884,
+    port: 1883,
     clientId: 'bridge_' + Math.random().toString(16).substr(2, 8),
     clean: true,
     connectTimeout: 4000
@@ -42,50 +83,104 @@ remoteClient.on('connect', function () {
 remoteClient.on('error', (err) => console.error("❌ ITB Connection Error:", err));
 remoteClient.on('offline', () => console.warn("⚠️ ITB Client Offline"));
 
-// --- 4. INCOMING FROM ITB -> HMI ---
+// --- 4. INCOMING FROM ITB -> HMI (& DB) ---
 remoteClient.on('message', function (topic, message) {
-    // Forward to local HMI
+    // 1. Forward to local HMI (Existing)
     aedes.publish({ topic: topic, payload: message, qos: 0, retain: false });
+
+    // 2. Process for Database (New Logic)
+    const msgString = message.toString();
+    const shortTopic = topic.split('/').slice(3).join('/'); // for logging (optional)
+    
+    let dataChanged = false;
+
+    // --- LOGIKA MAPPING SESUAI SCHEMA (Mimicked) ---
+
+    // --- 1. SENSORS (Boolean) ---
+    if (topic.includes('sensor/ir/state')) {
+        lastKnownState.irSensor = parseBool(msgString);
+        dataChanged = true;
+    } 
+    else if (topic.includes('sensor/inductive/state')) {
+        lastKnownState.inductiveSensor = parseBool(msgString);
+        dataChanged = true;
+    }
+    else if (topic.includes('sensor/capacitive/state')) {
+        lastKnownState.capacitiveSensor = parseBool(msgString);
+        dataChanged = true;
+    }
+    else if (topic.includes('sensor/position_inner/state')) {
+        lastKnownState.positionInnerSensor = parseBool(msgString);
+        dataChanged = true;
+    }
+    else if (topic.includes('sensor/position_outer/state')) {
+        lastKnownState.positionOuterSensor = parseBool(msgString);
+        dataChanged = true;
+    }
+
+    // --- 2. SENSORS (Integer) ---
+    else if (topic.includes('sensor/motor_speed/state')) {
+        lastKnownState.motorSpeedSensor = parseInt(msgString) || 0;
+        dataChanged = true;
+    }
+    else if (topic.includes('sensor/object_inner/state')) {
+        lastKnownState.objectInnerCount = parseInt(msgString) || 0;
+        dataChanged = true;
+    }
+    else if (topic.includes('sensor/object_outer/state')) {
+        lastKnownState.objectOuterCount = parseInt(msgString) || 0;
+        dataChanged = true;
+    }
+
+    // --- 3. ACTUATORS ---
+    else if (topic.endsWith('actuator/DL/push')) {
+        lastKnownState.dlPush = parseBool(msgString);
+        dataChanged = true;
+    }
+    else if (topic.endsWith('actuator/OL/pull') || topic.endsWith('actuator/DL/pull')) {
+        lastKnownState.dlPull = parseBool(msgString);
+        dataChanged = true;
+    }
+    else if (topic.endsWith('actuator/LD/push')) {
+        lastKnownState.ldPush = parseBool(msgString);
+        dataChanged = true;
+    }
+    else if (topic.endsWith('actuator/LD/pull')) {
+        lastKnownState.ldPull = parseBool(msgString);
+        dataChanged = true;
+    }
+    else if (topic.endsWith('actuator/stepper/inner')) {
+        lastKnownState.stepperInnerRotate = parseBool(msgString);
+        dataChanged = true;
+    }
+    else if (topic.endsWith('actuator/stepper/outer')) {
+        lastKnownState.stepperOuterRotate = parseBool(msgString);
+        dataChanged = true;
+    }
+    else if (topic.endsWith('actuator/stepper/speed')) {
+        lastKnownState.stepperSpeedSetting = parseInt(msgString) || 0;
+        dataChanged = true;
+    }
+
+    // --- KIRIM KE DB ---
+    if (dataChanged && handleConveyor) { 
+        // console.log(`   ✨ Update State Detected for DB`);
+        const packetForDB = {
+          topic: topic,
+          payload: JSON.stringify(lastKnownState)
+        };
+        try {
+          // Pass remoteClient as 'client' argument, though handler might not use it
+          handleConveyor(packetForDB, remoteClient);
+        } catch (err) {
+          console.error("   ❌ Handler Error:", err.message);
+        }
+    }
 });
 
 // --- 5. INCOMING FROM HMI -> ITB (THE CRITICAL PART) ---
 aedes.on('publish', function (packet, client) {
     if (!client) return; // Ignore internal messages
     
-    const topic = packet.topic;
-
-    if (topic.startsWith('from_web/conveyor/')) {
-        const payloadStr = packet.payload.toString();
-        console.log(`INPUT: ${topic} -> ${payloadStr}`);
-
-        try {
-            const data = JSON.parse(payloadStr);
-            let rawValue = "";
-
-            if (data.hasOwnProperty('state')) {
-                rawValue = data.state ? "1" : "0";
-            } else if (data.hasOwnProperty('value')) {
-                rawValue = data.value.toString();
-            }
-
-            const suffix = topic.replace('from_web/', ''); 
-            const targetTopic = `${REMOTE_TOPIC_PUB_PREFIX}/${suffix}`;
-
-            if (rawValue !== "") {
-                console.log(`   Attempting send to ITB: [${targetTopic}] Payload: [${rawValue}]`);
-                
-                // FIX 3: Explicit Buffer & Error Callback
-                remoteClient.publish(targetTopic, Buffer.from(rawValue), { qos: 0, retain: false }, function (err) {
-                    if (err) {
-                        console.error(`   ❌ PUBLISH ERROR: ${err.message}`);
-                    } else {
-                        console.log(`   ✅ SUCCESS: Sent to ITB!`);
-                    }
-                });
-            }
-
-        } catch (e) {
-            console.error(`   ❌ PARSE ERROR: ${e.message}`);
-        }
-    }
+    remoteClient.publish(topic, packet.payload, {qos: 0, retain: false});
 });
