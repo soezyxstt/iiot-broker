@@ -182,5 +182,5 @@ remoteClient.on('message', function (topic, message) {
 aedes.on('publish', function (packet, client) {
     if (!client) return; // Ignore internal messages
     
-    remoteClient.publish(topic, packet.payload, {qos: 0, retain: false});
+    remoteClient.publish(packet.topic, packet.payload, {qos: 0, retain: false});
 });
